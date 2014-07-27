@@ -1,0 +1,147 @@
+---
+title: "Weight Lifting Error Classification"
+author: "bw0"
+date: "Sunday, July 27, 2014"
+output: html_document
+---
+## Summary
+
+- The project task is to provide a classifier that, when given the specified body-worn motion sensor data, determines if the motion is a specific correctly performed weight lifting exercise, or one of four specified incorrect executions of that exercise.
+
+- A classifier was created using Random Forest and correctly predicted the 20 externally-graded test cases.
+
+- A variety of techniques were applied and validations were performed in the development and testing of the final model.
+
+```{r, init, echo=FALSE,results='hide'}
+setwd("C:/MOOCs/Coursera/Current/Practical Machine Learning/Project")
+library(caret)
+```
+## The Data
+
+- Two sets of data were provided as spreadsheets. Both contained 160 variables. The training data contained 19,622 records, the quiz test set (for external grading) contained 20 records.
+- The data had 7 identification columns (timestamps, record number, etc.), 152 predictor columns and 1 classification variable with 5 values, classe, to be predicted.
+- All columns that contained NAs or blank values were immediately removed, as they provide no predictive value. These columns contained no values other than NA or blank, so interpolation was not a consideration. This left 52 predictor columns.
+
+## Random Forests
+
+Three different Random Forest models were built:  
+- two different models each using 30% of the training data (different random samples of 30%)  
+- one using 50% of the training data. 
+
+**They all produced identical predictions on the quiz set of 20 cases, all correct.**
+
+### CrossValidation
+
+Muliple validation efforts were made:
+- The Random Forest algorithm does random resampling from its training set, which provides some internal cross validation  
+- The 3 Random Forest models were run against the data not used in training and confusion matrices were produced. In all cases, the accuracy was > 98%
+
+#### Random Forest Model
+Here is a display of the 50% sample Random Forest model. The 30% models had almost identical predicted accuracy metrics. **This model had an expected accuracy of > 98%,** based on the default 25 resamplings.
+```
+Random Forest 
+
+9812 samples
+  52 predictors
+   5 classes: 'A', 'B', 'C', 'D', 'E' 
+
+No pre-processing
+Resampling: Bootstrapped (25 reps) 
+
+Summary of sample sizes: 9812, 9812, 9812, 9812, 9812, 9812, ... 
+
+Resampling results across tuning parameters:
+
+  mtry  Accuracy  Kappa  Accuracy SD  Kappa SD
+  2     0.982     0.977  0.00274      0.00347 
+  27    0.984     0.979  0.0028       0.00354 
+  52    0.975     0.969  0.00542      0.00683 
+
+Accuracy was used to select the optimal model using  the largest value.
+The final value used for the model was mtry = 27. 
+```
+#### CrossValidation Confusion Matrix
+The various RF models were used to predict the classe in the test set. All three models produced comparable results. Here is the confusion matrix for the 50% model run against the remaining 50% of the supplied data. **The 95% confidence interval for the accuracy is > 98%.**
+
+```
+Confusion Matrix and Statistics
+
+          Reference
+Prediction    A    B    C    D    E
+         A 2787   34    0    0    0
+         B    1 1855   24    5    1
+         C    2    8 1673   25    4
+         D    0    1   14 1570    6
+         E    0    0    0    8 1792
+
+Overall Statistics
+                                         
+               Accuracy : 0.9864         
+                 95% CI : (0.984, 0.9886)
+    No Information Rate : 0.2844         
+    P-Value [Acc > NIR] : < 2.2e-16      
+                                         
+                  Kappa : 0.9828         
+ Mcnemar's Test P-Value : NA             
+
+Statistics by Class:
+
+                     Class: A Class: B Class: C Class: D Class: E
+Sensitivity            0.9989   0.9773   0.9778   0.9764   0.9939
+Specificity            0.9952   0.9961   0.9952   0.9974   0.9990
+Pos Pred Value         0.9879   0.9836   0.9772   0.9868   0.9956
+Neg Pred Value         0.9996   0.9946   0.9953   0.9954   0.9986
+Prevalence             0.2844   0.1935   0.1744   0.1639   0.1838
+Detection Rate         0.2841   0.1891   0.1705   0.1600   0.1827
+Detection Prevalence   0.2876   0.1923   0.1745   0.1622   0.1835
+Balanced Accuracy      0.9970   0.9867   0.9865   0.9869   0.9964
+```
+### Other RF comments
+
+The RF model consumes lots of CPU and memory. Using all the cores on your CPU makes the waiting more tolerable and seeing the CPU meter pegged at 100% is reassuring. The below code allows for this full utilization of available resources.
+```
+library(doParallel)
+cl<-makeCluster(detectCores())
+registerDoParallel(cl)
+```
+
+## Other efforts
+
+### Dimension reduction analysis
+
+If Random Forest using 52 variables would have taken too long to be practical on my machine, I planned to reduce the number of variables. I examined the data using a correlation matrix and using the nearZeroVar function (code only below). Luckily I was able to avoid having to take that path.
+
+```
+M <- abs(cor(data53[,-53]))
+diag(M) <- 0
+which(M > 0.8,arr.ind=T)
+
+library(caret)
+nearZeroVar(data53, saveMetrics = TRUE)
+```
+
+
+### Tree models
+
+An attempt was made to use tree models. The training data was split into training/testing sets, in 10% increments from 10/90 training/testing to 90/10 training/testing. Models were fit at each of these increments and tested on the training and test sets. The resulst were uniformly poor, with the best results at a 50/50 split. Though discarded as a model, the info is interesting:
+
+#### Accuracy of trees at different training / testing splits vs training and testing sets
+
+% Training | Train Acc | Test Acc  
+---------- | --------- | --------   
+10 | 0.5458 | 0.519  
+20 | 0.5628 | 0.5634  
+30 | 0.5171 | 0.515  
+40 | 0.5745 | 0.5703  
+50 | 0.5744 | 0.5713  
+60 | 0.5669 | 0.5565  
+70 | 0.5527 | 0.5458  
+80 | 0.5535 | 0.5427  
+90 | 0.5535 | 0.5434  
+
+
+## Acknowledgement
+The data was generously made available by:
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz38gQulnz0
